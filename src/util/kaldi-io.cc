@@ -17,6 +17,8 @@
 // MERCHANTABLITY OR NON-INFRINGEMENT.
 // See the Apache 2 License for the specific language governing permissions and
 // limitations under the License.
+#include "util/vfs_provider.h"
+
 #include "util/kaldi-io.h"
 #include <errno.h>
 #include <cstdlib>
@@ -37,7 +39,7 @@
 #endif  // KALDI_CYGWIN_COMPAT
 
 
-#if defined(_MSC_VER) 
+#if defined(_MSC_VER)
 static FILE *popen(const char* command, const char* mode) {
 #ifdef KALDI_CYGWIN_COMPAT
   return kaldi::CygwinCompatPopen(command, mode);
@@ -413,6 +415,50 @@ class FileInputImpl: public InputImplBase {
   }
  private:
   std::ifstream is_;
+};
+
+class MemoryFileInputImpl: public InputImplBase {
+ public:
+  MemoryFileInputImpl(): is_open_(false) { }
+
+  virtual bool Open(const std::string &filename, bool binary) {
+    if (is_open_) KALDI_ERR << "MemoryFileInputImpl::Open(), "
+                                << "open called on already open file.";
+    file_ = VFS::Get()->GetFile(filename);
+    std::cout << file_.size();
+    is_ = new imemstream(reinterpret_cast<char*>(file_.data()), file_.size());
+    is_open_ = true;
+    return is_open_;
+  }
+
+  virtual std::istream &Stream() {
+    if (!is_open_)
+      KALDI_ERR << "MemoryFileInputImpl::Stream(), file is not open.";
+    // I believe this error can only arise from coding error.
+    return *is_;
+  }
+
+  virtual int32 Close() {
+    if (!is_open_)
+      KALDI_ERR << "FileInputImpl::Close(), file is not open.";
+    // I believe this error can only arise from coding error.
+    is_open_ = false;
+    delete is_;
+    file_.clear();
+    // Don't check status.
+    return 0;
+  }
+
+  virtual InputType MyType() { return kFileInput; }
+
+  virtual ~MemoryFileInputImpl() {
+    // Stream will automatically be closed, and we don't care about
+    // whether it fails.
+  }
+  private:
+      bool is_open_;
+      std::vector<uint8_t> file_;
+      imemstream* is_;
 };
 
 
@@ -795,7 +841,14 @@ bool Input::OpenInternal(const std::string &rxfilename,
     }
   }
   if (type ==  kFileInput) {
-    impl_ = new FileInputImpl();
+    if(VFS::Get() && VFS::Get()->HasFile(rxfilename)){
+      std::cout << ">>>>>>>>>>>>>>>> Found file: " << rxfilename << " in VFS <<<<<<<<<<<<<<<<" << std::endl;
+      impl_ = new MemoryFileInputImpl();
+    }
+    else{
+      std::cout << ">>>>>>>>>>>>>>>> Cannot find file: " << rxfilename << " in VFS <<<<<<<<<<<<<<<<" << std::endl;
+      impl_ = new FileInputImpl();
+    }
   } else if (type == kStandardInput) {
     impl_ = new StandardInputImpl();
   } else if (type == kPipeInput) {
@@ -809,8 +862,10 @@ bool Input::OpenInternal(const std::string &rxfilename,
   }
   if (!impl_->Open(rxfilename, file_binary)) {  // true is binary mode--
     // always read in binary.
+    std::cout << ">>>>>>>>>>>>>>>> Open file: " << rxfilename << " failed <<<<<<<<<<<<<<<<" << std::endl;
     delete impl_;
     impl_ = NULL;
+
     return false;
   }
   if (contents_binary != NULL)

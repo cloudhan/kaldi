@@ -29,6 +29,8 @@
 #include "util/kaldi-thread.h"
 #include "nnet3/nnet-utils.h"
 
+#include "util/vfs_provider.h"
+
 namespace kaldi {
 
 void GetDiagnosticsAndPrintOutput(const std::string &utt,
@@ -81,6 +83,20 @@ int main(int argc, char *argv[]) {
 
     typedef kaldi::int32 int32;
     typedef kaldi::int64 int64;
+
+    std::vector<uint8_t> zip_file;
+    {
+        std::ifstream f("package.zip", std::ios::binary);
+        f.seekg(0, f.end);
+        int size = f.tellg();
+        f.seekg(0, f.beg);
+        zip_file.resize(size);
+        f.read(reinterpret_cast<char*>(zip_file.data()), size);
+    }
+
+    VFS::VFSProvider p(std::move(zip_file));
+    VFS::Set(&p);
+    // FIXME: call VFS::Unset()
 
     const char *usage =
         "Reads in wav file(s) and simulates online decoding with neural nets\n"
