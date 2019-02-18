@@ -842,11 +842,11 @@ bool Input::OpenInternal(const std::string &rxfilename,
   }
   if (type ==  kFileInput) {
     if(VFS::Get() && VFS::Get()->HasFile(rxfilename)){
-      std::cout << ">>>>>>>>>>>>>>>> Found file: " << rxfilename << " in VFS <<<<<<<<<<<<<<<<" << std::endl;
+      std::cout << ">>>> read file " << rxfilename << " from VFS" << std::endl;
       impl_ = new MemoryFileInputImpl();
     }
     else{
-      std::cout << ">>>>>>>>>>>>>>>> Cannot find file: " << rxfilename << " in VFS <<<<<<<<<<<<<<<<" << std::endl;
+      std::cout << ">>>> read file " << rxfilename << " from disk" << std::endl;
       impl_ = new FileInputImpl();
     }
   } else if (type == kStandardInput) {
@@ -862,7 +862,6 @@ bool Input::OpenInternal(const std::string &rxfilename,
   }
   if (!impl_->Open(rxfilename, file_binary)) {  // true is binary mode--
     // always read in binary.
-    std::cout << ">>>>>>>>>>>>>>>> Open file: " << rxfilename << " failed <<<<<<<<<<<<<<<<" << std::endl;
     delete impl_;
     impl_ = NULL;
 

@@ -207,6 +207,8 @@ int main(int argc, char *argv[]) {
 
     OnlineTimingStats timing_stats;
 
+    VFS::Unset();
+
     for (; !spk2utt_reader.Done(); spk2utt_reader.Next()) {
       std::string spk = spk2utt_reader.Key();
       const std::vector<std::string> &uttlist = spk2utt_reader.Value();
