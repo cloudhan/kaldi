@@ -21,6 +21,8 @@
 #include "lat/lattice-functions.h"
 #include "lat/determinize-lattice-pruned.h"
 
+#include "util/microprofile.h"
+
 namespace kaldi {
 
 void OnlineGmmAdaptationState::Read(std::istream &in_stream, bool binary) {
@@ -47,7 +49,7 @@ void OnlineGmmAdaptationState::Write(std::ostream &out_stream, bool binary) cons
 
 SingleUtteranceGmmDecoder::SingleUtteranceGmmDecoder(
     const OnlineGmmDecodingConfig &config,
-    const OnlineGmmDecodingModels &models,                            
+    const OnlineGmmDecodingModels &models,
     const OnlineFeaturePipeline &feature_prototype,
     const fst::Fst<fst::StdArc> &fst,
     const OnlineGmmAdaptationState &adaptation_state):
@@ -67,6 +69,7 @@ SingleUtteranceGmmDecoder::SingleUtteranceGmmDecoder(
 
 // Advance the decoding as far as we can, and possibly estimate fMLLR.
 void SingleUtteranceGmmDecoder::AdvanceDecoding() {
+  MICROPROFILE_SCOPEI("decoder", "SingleUtteranceGmmDecoder::AdvanceDecoding", MP_SPRINGGREEN1);
 
   const AmDiagGmm &am_gmm = (HaveTransform() ? models_.GetModel() :
                              models_.GetOnlineAlignmentModel());
@@ -80,11 +83,11 @@ void SingleUtteranceGmmDecoder::AdvanceDecoding() {
                                          feature_pipeline_);
 
   int32 old_frames = decoder_.NumFramesDecoded();
-  
+
   // This will decode as many frames as are currently available.
   decoder_.AdvanceDecoding(&decodable);
 
-  
+
   {  // possibly estimate fMLLR.
     int32 new_frames = decoder_.NumFramesDecoded();
     BaseFloat frame_shift = feature_pipeline_->FrameShiftInSeconds();
@@ -117,24 +120,24 @@ bool SingleUtteranceGmmDecoder::GetGaussianPosteriors(bool end_of_utterance,
     KALDI_WARN << "You have decoded no data so cannot estimate fMLLR.";
     return false;
   }
-  
+
   KALDI_ASSERT(config_.fmllr_lattice_beam > 0.0);
-  
+
   // Note: we'll just use whatever acoustic scaling factor we were decoding
   // with.  This is in the lattice that we get from decoder_.GetRawLattice().
   Lattice raw_lat;
   decoder_.GetRawLatticePruned(&raw_lat, end_of_utterance,
                                config_.fmllr_lattice_beam);
-  
+
   // At this point we could rescore the lattice if we wanted, and
   // this might improve the accuracy on long utterances that were
   // the first utterance of that speaker, if we had already
   // estimated the fMLLR by the time we reach this code (e.g. this
   // was the second call).  We don't do this right now.
-  
+
   PruneLattice(config_.fmllr_lattice_beam, &raw_lat);
 
-#if 1 // Do determinization. 
+#if 1 // Do determinization.
   Lattice det_lat; // lattice-determinized lattice-- represent this as Lattice
                    // not CompactLattice, as LatticeForwardBackward() does not
                    // accept CompactLattice.
@@ -143,13 +146,13 @@ bool SingleUtteranceGmmDecoder::GetGaussianPosteriors(bool end_of_utterance,
   fst::Invert(&raw_lat); // want to determinize on words.
   fst::ILabelCompare<kaldi::LatticeArc> ilabel_comp;
   fst::ArcSort(&raw_lat, ilabel_comp); // improves efficiency of determinization
-  
+
   fst::DeterminizeLatticePruned(raw_lat,
                                 double(config_.fmllr_lattice_beam),
                                 &det_lat);
 
   fst::Invert(&det_lat); // invert back.
-  
+
   if (det_lat.NumStates() == 0) {
     // Do nothing if the lattice is empty.  This should not happen.
     KALDI_WARN << "Got empty lattice.  Not estimating fMLLR.";
@@ -159,7 +162,7 @@ bool SingleUtteranceGmmDecoder::GetGaussianPosteriors(bool end_of_utterance,
   Lattice &det_lat = raw_lat; // Don't determinize.
 #endif
   TopSortLatticeIfNeeded(&det_lat);
-  
+
   // Note: the acoustic scale we use here is whatever we decoded with.
   Posterior post;
   BaseFloat tot_fb_like = LatticeForwardBackward(det_lat, &post);
@@ -171,15 +174,15 @@ bool SingleUtteranceGmmDecoder::GetGaussianPosteriors(bool end_of_utterance,
   ConstIntegerSet<int32> silence_set(silence_phones_);  // faster lookup
   const TransitionModel &trans_model = models_.GetTransitionModel();
   WeightSilencePost(trans_model, silence_set,
-                    config_.silence_weight, &post);  
-  
+                    config_.silence_weight, &post);
+
   const AmDiagGmm &am_gmm = (HaveTransform() ? models_.GetModel() :
                              models_.GetOnlineAlignmentModel());
 
 
   Posterior pdf_post;
   ConvertPosteriorToPdfs(trans_model, post, &pdf_post);
-  
+
   Vector<BaseFloat> feat(feature_pipeline_->Dim());
 
   double tot_like = 0.0, tot_weight = 0.0;
@@ -200,7 +203,7 @@ bool SingleUtteranceGmmDecoder::GetGaussianPosteriors(bool end_of_utterance,
   }
   KALDI_VLOG(3) << "Average likelihood weighted by posterior was "
                 << (tot_like / tot_weight) << " over " << tot_weight
-                << " frames (after downweighting silence).";  
+                << " frames (after downweighting silence).";
   return true;
 }
 
@@ -215,13 +218,13 @@ void SingleUtteranceGmmDecoder::EstimateFmllr(bool end_of_utterance) {
     feature_pipeline_->GetAsMatrix(&feats);
     KALDI_VLOG(2) << "Features are " << feats;
   }
-  
+
 
   GaussPost gpost;
   GetGaussianPosteriors(end_of_utterance, &gpost);
-  
+
   FmllrDiagGmmAccs &spk_stats = adaptation_state_.spk_stats;
-  
+
   if (spk_stats.beta_ !=
       orig_adaptation_state_.spk_stats.beta_) {
     // This could happen if the user called EstimateFmllr() twice on the
@@ -230,11 +233,11 @@ void SingleUtteranceGmmDecoder::EstimateFmllr(bool end_of_utterance) {
     // (possibly empty).
     spk_stats = orig_adaptation_state_.spk_stats;
   }
-  
+
   int32 dim = feature_pipeline_->Dim();
   if (spk_stats.Dim() == 0)
     spk_stats.Init(dim);
-  
+
   Matrix<BaseFloat> empty_transform;
   feature_pipeline_->SetTransform(empty_transform);
   Vector<BaseFloat> feat(dim);
@@ -247,13 +250,13 @@ void SingleUtteranceGmmDecoder::EstimateFmllr(bool end_of_utterance) {
     // of the transform).
     feature_pipeline_->FreezeCmvn();
   }
-  
+
   // GetModel() returns the model to be used for estimating
   // transforms.
   const AmDiagGmm &am_gmm = models_.GetModel();
-  
+
   for (size_t i = 0; i < gpost.size(); i++) {
-    feature_pipeline_->GetFrame(i, &feat);    
+    feature_pipeline_->GetFrame(i, &feat);
     for (size_t j = 0; j < gpost[i].size(); j++) {
       int32 pdf_id = gpost[i][j].first; // caution: this gpost has pdf-id
                                         // instead of transition-id, which is
@@ -263,7 +266,7 @@ void SingleUtteranceGmmDecoder::EstimateFmllr(bool end_of_utterance) {
                                          feat, posterior);
     }
   }
-  
+
   const BasisFmllrEstimate &basis = models_.GetFmllrBasis();
   if (basis.Dim() == 0)
     KALDI_ERR << "In order to estimate fMLLR, you need to supply the "
@@ -335,7 +338,7 @@ void SingleUtteranceGmmDecoder::GetLattice(bool rescore_if_needed,
   DeterminizeLatticePhonePrunedWrapper(models_.GetTransitionModel(),
                                        &lat, lat_beam, clat,
                                        config_.faster_decoder_opts.det_opts);
-  
+
 }
 
 void SingleUtteranceGmmDecoder::GetBestPath(bool end_of_utterance,
@@ -354,7 +357,7 @@ OnlineGmmDecodingModels::OnlineGmmDecodingModels(
     tmodel_.Read(ki.Stream(), binary);
     model_.Read(ki.Stream(), binary);
   }
-  
+
   if (!config.online_alimdl_rxfilename.empty()) {
     bool binary;
     Input ki(config.online_alimdl_rxfilename, &binary);
@@ -409,7 +412,7 @@ const AmDiagGmm &OnlineGmmDecodingModels::GetFinalModel() const {
 }
 
 const BasisFmllrEstimate &OnlineGmmDecodingModels::GetFmllrBasis() const {
-  return fmllr_basis_;  
+  return fmllr_basis_;
 }
 
 

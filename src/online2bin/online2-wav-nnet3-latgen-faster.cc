@@ -30,6 +30,8 @@
 #include "nnet3/nnet-utils.h"
 
 #include "util/vfs_provider.h"
+#include "util/microprofile.h"
+#include "util/timer.h"
 
 namespace kaldi {
 
@@ -77,27 +79,37 @@ void GetDiagnosticsAndPrintOutput(const std::string &utt,
 }
 
 int main(int argc, char *argv[]) {
+  MicroProfileOnThreadCreate("Main");
+  MicroProfileSetEnableAllGroups(true);
+  MicroProfileSetForceMetaCounters(true);
+  T::Init();
   try {
+    MICROPROFILE_SCOPEI("try", "try", -1);
+
     using namespace kaldi;
     using namespace fst;
 
     typedef kaldi::int32 int32;
     typedef kaldi::int64 int64;
 
+    MICROPROFILE_TIMELINE_ENTER_STATIC(MP_AZURE1, "zip");
     std::vector<uint8_t> zip_file;
     {
-        std::ifstream f("package.zip", std::ios::binary);
-        f.seekg(0, f.end);
-        int size = f.tellg();
-        f.seekg(0, f.beg);
-        zip_file.resize(size);
-        f.read(reinterpret_cast<char*>(zip_file.data()), size);
+      std::ifstream f("package.zip", std::ios::binary);
+      f.seekg(0, f.end);
+      int size = f.tellg();
+      f.seekg(0, f.beg);
+      zip_file.resize(size);
+      f.read(reinterpret_cast<char *>(zip_file.data()), size);
     }
+    MICROPROFILE_TIMELINE_LEAVE_STATIC("zip");
 
+    MICROPROFILE_TIMELINE_ENTER_STATIC(MP_VIOLET, "VFS");
     VFS::VFSProvider p(std::move(zip_file));
     VFS::Set(&p);
-    // FIXME: call VFS::Unset()
 
+    MICROPROFILE_TIMELINE_LEAVE_STATIC("VFS");
+    MICROPROFILE_TIMELINE_ENTER_STATIC(MP_POWDERBLUE, "option");
     const char *usage =
         "Reads in wav file(s) and simulates online decoding with neural nets\n"
         "(nnet3 setup), with optional iVector-based speaker adaptation and\n"
@@ -155,12 +167,18 @@ int main(int argc, char *argv[]) {
       po.PrintUsage();
       return 1;
     }
+    else {
+      po.PrintConfig(std::cout);
+    }
 
     std::string nnet3_rxfilename = po.GetArg(1),
         fst_rxfilename = po.GetArg(2),
         spk2utt_rspecifier = po.GetArg(3),
         wav_rspecifier = po.GetArg(4),
         clat_wspecifier = po.GetArg(5);
+
+    MICROPROFILE_TIMELINE_LEAVE_STATIC("option");
+    MICROPROFILE_TIMELINE_ENTER_STATIC(MP_POWDERBLUE, "pipeline");
 
     OnlineNnet2FeaturePipelineInfo feature_info(feature_opts);
 
@@ -192,10 +210,14 @@ int main(int argc, char *argv[]) {
     fst::Fst<fst::StdArc> *decode_fst = ReadFstKaldiGeneric(fst_rxfilename);
 
     fst::SymbolTable *word_syms = NULL;
-    if (word_syms_rxfilename != "")
-      if (!(word_syms = fst::SymbolTable::ReadText(word_syms_rxfilename)))
+    if (word_syms_rxfilename != "") {
+      auto word_syms_file = ::VFS::Get()->GetFile(word_syms_rxfilename);
+      imemstream ims(reinterpret_cast<char*>(word_syms_file.data()), word_syms_file.size());
+      if (!(word_syms = fst::SymbolTable::ReadText(ims, word_syms_rxfilename)))
         KALDI_ERR << "Could not read symbol table from file "
                   << word_syms_rxfilename;
+    }
+
 
     int32 num_done = 0, num_err = 0;
     double tot_like = 0.0;
@@ -209,12 +231,23 @@ int main(int argc, char *argv[]) {
 
     VFS::Unset();
 
+    MICROPROFILE_TIMELINE_LEAVE_STATIC("pipeline");
+    MICROPROFILE_TIMELINE_ENTER_STATIC(MP_MAGENTA1, "main_loop");
+
     for (; !spk2utt_reader.Done(); spk2utt_reader.Next()) {
+      MicroProfileFlip(0);
+
+      MICROPROFILE_SCOPEI("main_loop", "main_loop", MP_MAGENTA1);
+
       std::string spk = spk2utt_reader.Key();
       const std::vector<std::string> &uttlist = spk2utt_reader.Value();
       OnlineIvectorExtractorAdaptationState adaptation_state(
           feature_info.ivector_extractor_info);
       for (size_t i = 0; i < uttlist.size(); i++) {
+        MICROPROFILE_SCOPEI("uttlist_loop", "uttlist_loop", MP_TURQUOISE1);
+
+        MICROPROFILE_ENTERI("wav_reader", "wav_reader", MP_ROSYBROWN1);
+
         std::string utt = uttlist[i];
         if (!wav_reader.HasKey(utt)) {
           KALDI_WARN << "Did not find audio for utterance " << utt;
@@ -225,8 +258,10 @@ int main(int argc, char *argv[]) {
         // get the data for channel zero (if the signal is not mono, we only
         // take the first channel).
         SubVector<BaseFloat> data(wave_data.Data(), 0);
+        MICROPROFILE_LEAVE();
 
-        OnlineNnet2FeaturePipeline feature_pipeline(feature_info);
+        MICROPROFILE_ENTERI("pipeline_init", "pipeline_init", MP_PALEVIOLETRED1);
+        OnlineNnet2FeaturePipeline feature_pipeline(feature_info);              // 初始化pipeline，pipeline通过AcceptWaveform来接收输入
         feature_pipeline.SetAdaptationState(adaptation_state);
 
         OnlineSilenceWeighting silence_weighting(
@@ -240,8 +275,8 @@ int main(int argc, char *argv[]) {
         OnlineTimer decoding_timer(utt);
 
         BaseFloat samp_freq = wave_data.SampFreq();
-        int32 chunk_length;
-        if (chunk_length_secs > 0) {
+        int32 chunk_length;                                                     // 分帧，计算需要塞入的波形片段的长度
+        if (chunk_length_secs > 0) {                                            // 时间定长，wav采样频率和文件有关
           chunk_length = int32(samp_freq * chunk_length_secs);
           if (chunk_length == 0) chunk_length = 1;
         } else {
@@ -250,14 +285,19 @@ int main(int argc, char *argv[]) {
 
         int32 samp_offset = 0;
         std::vector<std::pair<int32, BaseFloat> > delta_weights;
+        MICROPROFILE_LEAVE();
 
         while (samp_offset < data.Dim()) {
+          MICROPROFILE_SCOPEI("samp_while", "samp_while", MP_SADDLEBROWN);
+
+          MICROPROFILE_ENTERI("samp_while", "wav_in", MP_WHEAT1);
           int32 samp_remaining = data.Dim() - samp_offset;
           int32 num_samp = chunk_length < samp_remaining ? chunk_length
                                                          : samp_remaining;
 
           SubVector<BaseFloat> wave_part(data, samp_offset, num_samp);
-          feature_pipeline.AcceptWaveform(samp_freq, wave_part);
+          feature_pipeline.AcceptWaveform(samp_freq, wave_part);                // 给pipeline塞一个长度为num_samp的波形片段。并没有真正的计算负载，
+                                                                                // 只有在调GetFrame或者AdvanceDecoding的才会有计算负载
 
           samp_offset += num_samp;
           decoding_timer.WaitUntil(samp_offset / samp_freq);
@@ -265,16 +305,24 @@ int main(int argc, char *argv[]) {
             // no more input. flush out last frames
             feature_pipeline.InputFinished();
           }
+          MICROPROFILE_LEAVE();
 
-          if (silence_weighting.Active() &&
+          MICROPROFILE_ENTERI("samp_while", "feature_if", MP_FIREBRICK1);
+          if (silence_weighting.Active() &&                                     // 测例中，这段代码没有执行
               feature_pipeline.IvectorFeature() != NULL) {
             silence_weighting.ComputeCurrentTraceback(decoder.Decoder());
             silence_weighting.GetDeltaWeights(feature_pipeline.NumFramesReady(),
                                               &delta_weights);
             feature_pipeline.IvectorFeature()->UpdateFrameWeights(delta_weights);
           }
+          MICROPROFILE_LEAVE();
 
-          decoder.AdvanceDecoding();
+          MICROPROFILE_ENTERI("samp_while", "AdvanceDecodingCall", MP_ALICEBLUE);
+          T::Start(0);
+          decoder.AdvanceDecoding();  // 识别的最关键步骤
+          T::End(0);
+
+          MICROPROFILE_LEAVE();
 
           if (do_endpointing && decoder.EndpointDetected(endpoint_opts)) {
             break;
@@ -313,9 +361,23 @@ int main(int argc, char *argv[]) {
               << " per frame over " << num_frames << " frames.";
     delete decode_fst;
     delete word_syms; // will delete if non-NULL.
-    return (num_done != 0 ? 0 : 1);
+    //return (num_done != 0 ? 0 : 1);
   } catch(const std::exception& e) {
     std::cerr << e.what();
     return -1;
   }
+
+  std::cout << "Dumping microprofile!" << std::endl;
+  MicroProfileDumpFileImmediately("online2_profile.html", "online2_profile.csv",
+                                  nullptr);
+
+  std::cout << T::Get(0).count() << " " << T::Get(1).count() << std::endl;
+
+  MicroProfileShutdown();
+
 } // main()
+
+MICROPROFILE_DECLARE_LOCAL_ATOMIC_COUNTER(ThreadsStarted);
+MICROPROFILE_DEFINE_LOCAL_ATOMIC_COUNTER(ThreadSpinSleep, "/runtime/spin_sleep");
+MICROPROFILE_DECLARE_LOCAL_COUNTER(LocalCounter);
+MICROPROFILE_DEFINE_LOCAL_COUNTER(LocalCounter, "/runtime/localcounter");

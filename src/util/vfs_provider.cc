@@ -45,7 +45,8 @@ std::vector<uint8_t> VFSProvider::GetFile(const std::string& name) {
   size_t size = name2size.at(stripped_name);
   std::vector<uint8_t> file(size);
   mz_zip_reader_extract_to_mem(&zip_archive, file_index, file.data(), size, 0);
-  // std::cout << "successfully read file " << stripped_name << " from VFS" << std::endl;
+  // TODO: maybe LOG?
+  std::cout << "INFO: successfully read file " << stripped_name << " from VFS" << std::endl;
 
   return file;
 }

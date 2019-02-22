@@ -11,10 +11,11 @@ TESTFILES = const-integer-set-test stl-utils-test text-utils-test \
 
 OBJFILES = text-utils.o kaldi-io.o kaldi-holder.o kaldi-table.o \
            parse-options.o simple-options.o simple-io-funcs.o \
-           kaldi-semaphore.o kaldi-thread.o vfs_provider.o miniz.o
+           kaldi-semaphore.o kaldi-thread.o vfs_provider.o miniz.o \
+           microprofile.o timer.o
 
 LIBNAME = kaldi-util
 
-ADDLIBS = ../matrix/kaldi-matrix.a ../base/kaldi-base.a 
+ADDLIBS = ../matrix/kaldi-matrix.a ../base/kaldi-base.a
 
 include ../makefiles/default_rules.mk

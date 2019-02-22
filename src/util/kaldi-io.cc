@@ -425,7 +425,6 @@ class MemoryFileInputImpl: public InputImplBase {
     if (is_open_) KALDI_ERR << "MemoryFileInputImpl::Open(), "
                                 << "open called on already open file.";
     file_ = VFS::Get()->GetFile(filename);
-    std::cout << file_.size();
     is_ = new imemstream(reinterpret_cast<char*>(file_.data()), file_.size());
     is_open_ = true;
     return is_open_;
@@ -842,11 +841,11 @@ bool Input::OpenInternal(const std::string &rxfilename,
   }
   if (type ==  kFileInput) {
     if(VFS::Get() && VFS::Get()->HasFile(rxfilename)){
-      std::cout << ">>>> read file " << rxfilename << " from VFS" << std::endl;
+      //std::cout << ">>>> read file " << rxfilename << " from VFS" << std::endl;
       impl_ = new MemoryFileInputImpl();
     }
     else{
-      std::cout << ">>>> read file " << rxfilename << " from disk" << std::endl;
+      //std::cout << ">>>> read file " << rxfilename << " from disk" << std::endl;
       impl_ = new FileInputImpl();
     }
   } else if (type == kStandardInput) {

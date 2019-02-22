@@ -7,9 +7,9 @@ SHELL := /bin/bash
 
 SUBDIRS = base matrix util feat tree gmm transform \
           fstext hmm lm decoder lat kws cudamatrix nnet \
-          bin fstbin gmmbin fgmmbin featbin \
-          nnetbin latbin sgmm2 sgmm2bin nnet2 nnet3 rnnlm chain nnet3bin nnet2bin kwsbin \
-          ivector ivectorbin online2 online2bin lmbin chainbin rnnlmbin
+          sgmm2  nnet2 nnet3 rnnlm chain kwsbin \
+          ivector online2 online2bin nnet3bin
+	  # bin fstbin gmmbin fgmmbin featbin nnetbin latbin sgmm2bin ivectorbin  lmbin chainbin rnnlmbin nnet2bin
 
 MEMTESTDIRS = base matrix util feat tree gmm transform \
           fstext hmm lm decoder lat nnet kws chain \

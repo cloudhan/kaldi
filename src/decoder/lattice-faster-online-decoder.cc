@@ -27,11 +27,15 @@
 #include "decoder/lattice-faster-online-decoder.h"
 #include "lat/lattice-functions.h"
 
+#include "util/microprofile.h"
+
 namespace kaldi {
 
 template <typename FST>
 bool LatticeFasterOnlineDecoderTpl<FST>::TestGetBestPath(
     bool use_final_probs) const {
+  MICROPROFILE_SCOPEI("decoder", "TestGetBestPath", MP_LIGHTBLUE1);
+
   Lattice lat1;
   {
     Lattice raw_lat;
@@ -55,6 +59,8 @@ bool LatticeFasterOnlineDecoderTpl<FST>::TestGetBestPath(
 template <typename FST>
 bool LatticeFasterOnlineDecoderTpl<FST>::GetBestPath(Lattice *olat,
                                                      bool use_final_probs) const {
+  MICROPROFILE_SCOPEI("decoder", "GetBestPath", MP_GAINSBORO);
+
   olat->DeleteStates();
   BaseFloat final_graph_cost;
   BestPathIterator iter = BestPathEnd(use_final_probs, &final_graph_cost);
@@ -78,6 +84,8 @@ template <typename FST>
 typename LatticeFasterOnlineDecoderTpl<FST>::BestPathIterator LatticeFasterOnlineDecoderTpl<FST>::BestPathEnd(
     bool use_final_probs,
     BaseFloat *final_cost_out) const {
+  MICROPROFILE_SCOPEI("decoder", "BestPathEnd", MP_POWDERBLUE);
+
   if (this->decoding_finalized_ && !use_final_probs)
     KALDI_ERR << "You cannot call FinalizeDecoding() and then call "
               << "BestPathEnd() with use_final_probs == false";
@@ -131,6 +139,8 @@ typename LatticeFasterOnlineDecoderTpl<FST>::BestPathIterator LatticeFasterOnlin
 template <typename FST>
 typename LatticeFasterOnlineDecoderTpl<FST>::BestPathIterator LatticeFasterOnlineDecoderTpl<FST>::TraceBackBestPath(
     BestPathIterator iter, LatticeArc *oarc) const {
+  MICROPROFILE_SCOPEI("decoder", "TraceBackBestPath", MP_BLUEVIOLET);
+
   KALDI_ASSERT(!iter.Done() && oarc != NULL);
   Token *tok = static_cast<Token*>(iter.tok);
   int32 cur_t = iter.frame, ret_t = cur_t;
@@ -169,6 +179,8 @@ bool LatticeFasterOnlineDecoderTpl<FST>::GetRawLatticePruned(
     Lattice *ofst,
     bool use_final_probs,
     BaseFloat beam) const {
+  MICROPROFILE_SCOPEI("decoder", "GetRawLatticePruned", MP_GREENYELLOW);
+
   typedef LatticeArc Arc;
   typedef Arc::StateId StateId;
   typedef Arc::Weight Weight;

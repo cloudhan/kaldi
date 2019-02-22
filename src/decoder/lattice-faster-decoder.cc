@@ -23,6 +23,8 @@
 #include "decoder/lattice-faster-decoder.h"
 #include "lat/lattice-functions.h"
 
+#include "util/microprofile.h"
+
 namespace kaldi {
 
 // instantiate this class once for each thing you have to decode.
@@ -517,6 +519,8 @@ void LatticeFasterDecoderTpl<FST, Token>::PruneTokensForFrame(int32 frame_plus_o
 // a cost to have "not changed").
 template <typename FST, typename Token>
 void LatticeFasterDecoderTpl<FST, Token>::PruneActiveTokens(BaseFloat delta) {
+  MICROPROFILE_SCOPEI("decoder", "PruneActiveTokens", MP_PALETURQUOISE1);
+
   int32 cur_frame_plus_one = NumFramesDecoded();
   int32 num_toks_begin = num_toks_;
   // The index "f" below represents a "frame plus one", i.e. you'd have to subtract
@@ -597,11 +601,15 @@ void LatticeFasterDecoderTpl<FST, Token>::AdvanceDecoding(DecodableInterface *de
     // is actually VectorFst or ConstFst.  If so, call the AdvanceDecoding()
     // function after casting *this to the more specific type.
     if (fst_->Type() == "const") {
+      MICROPROFILE_SCOPEI("decoder", "LatticeFasterDecoderTpl::AdvanceDecoding (const)",
+                        MP_FLORALWHITE);
       LatticeFasterDecoderTpl<fst::ConstFst<fst::StdArc>, Token> *this_cast =
           reinterpret_cast<LatticeFasterDecoderTpl<fst::ConstFst<fst::StdArc>, Token>* >(this);
       this_cast->AdvanceDecoding(decodable, max_num_frames);
       return;
     } else if (fst_->Type() == "vector") {
+      MICROPROFILE_SCOPEI("decoder", "LatticeFasterDecoderTpl::AdvanceDecoding (vector)",
+                      MP_FLORALWHITE);
       LatticeFasterDecoderTpl<fst::VectorFst<fst::StdArc>, Token> *this_cast =
           reinterpret_cast<LatticeFasterDecoderTpl<fst::VectorFst<fst::StdArc>, Token>* >(this);
       this_cast->AdvanceDecoding(decodable, max_num_frames);
@@ -609,6 +617,8 @@ void LatticeFasterDecoderTpl<FST, Token>::AdvanceDecoding(DecodableInterface *de
     }
   }
 
+  MICROPROFILE_SCOPEI("decoder", "LatticeFasterDecoderTpl::AdvanceDecoding",
+                      MP_FLORALWHITE);
 
   KALDI_ASSERT(!active_toks_.empty() && !decoding_finalized_ &&
                "You must call InitDecoding() before AdvanceDecoding");
@@ -623,6 +633,8 @@ void LatticeFasterDecoderTpl<FST, Token>::AdvanceDecoding(DecodableInterface *de
     target_frames_decoded = std::min(target_frames_decoded,
                                      NumFramesDecoded() + max_num_frames);
   while (NumFramesDecoded() < target_frames_decoded) {
+    MICROPROFILE_SCOPEI("decoder", "while_NumFramesDecoded",
+                      MP_CORNFLOWERBLUE);
     if (NumFramesDecoded() % config_.prune_interval == 0) {
       PruneActiveTokens(config_.lattice_beam * config_.prune_scale);
     }
@@ -726,6 +738,8 @@ BaseFloat LatticeFasterDecoderTpl<FST, Token>::GetCutoff(Elem *list_head, size_t
 template <typename FST, typename Token>
 BaseFloat LatticeFasterDecoderTpl<FST, Token>::ProcessEmitting(
     DecodableInterface *decodable) {
+  MICROPROFILE_SCOPEI("decoder", "ProcessEmitting", MP_PEACHPUFF1);
+
   KALDI_ASSERT(active_toks_.size() > 0);
   int32 frame = active_toks_.size() - 1; // frame is the frame-index
                                          // (zero-based) used to get likelihoods
@@ -831,6 +845,8 @@ void LatticeFasterDecoderTpl<FST, Token>::DeleteForwardLinks(Token *tok) {
 
 template <typename FST, typename Token>
 void LatticeFasterDecoderTpl<FST, Token>::ProcessNonemitting(BaseFloat cutoff) {
+  MICROPROFILE_SCOPEI("decoder", "ProcessNonemitting", MP_PALEGREEN1);
+
   KALDI_ASSERT(!active_toks_.empty());
   int32 frame = static_cast<int32>(active_toks_.size()) - 2;
   // Note: "frame" is the time-index we just processed, or -1 if

@@ -20,6 +20,8 @@
 #include "online2/online-nnet2-feature-pipeline.h"
 #include "transform/cmvn.h"
 
+#include "util/microprofile.h"
+
 namespace kaldi {
 
 OnlineNnet2FeaturePipelineInfo::OnlineNnet2FeaturePipelineInfo(
@@ -79,6 +81,10 @@ OnlineNnet2FeaturePipelineInfo::OnlineNnet2FeaturePipelineInfo(
 OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
     const OnlineNnet2FeaturePipelineInfo &info):
     info_(info) {
+  MICROPROFILE_SCOPEI("pipeline",
+                      "OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline",
+                      MP_CORNFLOWERBLUE);
+
   if (info_.feature_type == "mfcc") {
     base_feature_ = new OnlineMfcc(info_.mfcc_opts);
   } else if (info_.feature_type == "plp") {
@@ -125,6 +131,8 @@ int32 OnlineNnet2FeaturePipeline::NumFramesReady() const {
 
 void OnlineNnet2FeaturePipeline::GetFrame(int32 frame,
                                           VectorBase<BaseFloat> *feat) {
+  MICROPROFILE_SCOPEI("pipeline", "OnlineNnet2FeaturePipeline::GetFrame",
+                      MP_CORNFLOWERBLUE);
   return final_feature_->GetFrame(frame, feat);
 }
 

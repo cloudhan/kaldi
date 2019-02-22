@@ -23,6 +23,8 @@
 #include "lat/determinize-lattice-pruned.h"
 #include "decoder/grammar-fst.h"
 
+#include "util/microprofile.h"
+
 namespace kaldi {
 
 template <typename FST>
@@ -43,6 +45,7 @@ SingleUtteranceNnet3DecoderTpl<FST>::SingleUtteranceNnet3DecoderTpl(
 
 template <typename FST>
 void SingleUtteranceNnet3DecoderTpl<FST>::AdvanceDecoding() {
+  MICROPROFILE_SCOPEI("decoder", "SingleUtteranceNnet3DecoderTpl::AdvanceDecoding", MP_DARKBLUE);
   decoder_.AdvanceDecoding(&decodable_);
 }
 

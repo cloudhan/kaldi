@@ -20,6 +20,8 @@
 
 #include "decoder/faster-decoder.h"
 
+#include "util/microprofile.h"
+
 namespace kaldi {
 
 
@@ -55,6 +57,7 @@ void FasterDecoder::Decode(DecodableInterface *decodable) {
 
 void FasterDecoder::AdvanceDecoding(DecodableInterface *decodable,
                                       int32 max_num_frames) {
+  MICROPROFILE_SCOPEI("decoder", "FasterDecoder::AdvanceDecoding", MP_FIREBRICK1);
   KALDI_ASSERT(num_frames_decoded_ >= 0 &&
                "You must call InitDecoding() before AdvanceDecoding()");
   int32 num_frames_ready = decodable->NumFramesReady();
@@ -70,8 +73,8 @@ void FasterDecoder::AdvanceDecoding(DecodableInterface *decodable,
   while (num_frames_decoded_ < target_frames_decoded) {
     // note: ProcessEmitting() increments num_frames_decoded_
     double weight_cutoff = ProcessEmitting(decodable);
-    ProcessNonemitting(weight_cutoff); 
-  }    
+    ProcessNonemitting(weight_cutoff);
+  }
 }
 
 
@@ -178,7 +181,7 @@ double FasterDecoder::GetCutoff(Elem *list_head, size_t *tok_count,
     double beam_cutoff = best_cost + config_.beam,
         min_active_cutoff = std::numeric_limits<double>::infinity(),
         max_active_cutoff = std::numeric_limits<double>::infinity();
-    
+
     if (tmp_array_.size() > static_cast<size_t>(config_.max_active)) {
       std::nth_element(tmp_array_.begin(),
                        tmp_array_.begin() + config_.max_active,
@@ -189,7 +192,7 @@ double FasterDecoder::GetCutoff(Elem *list_head, size_t *tok_count,
       if (adaptive_beam)
         *adaptive_beam = max_active_cutoff - best_cost + config_.beam_delta;
       return max_active_cutoff;
-    }    
+    }
     if (tmp_array_.size() > static_cast<size_t>(config_.min_active)) {
       if (config_.min_active == 0) min_active_cutoff = best_cost;
       else {
@@ -231,12 +234,12 @@ double FasterDecoder::ProcessEmitting(DecodableInterface *decodable) {
                                    &adaptive_beam, &best_elem);
   KALDI_VLOG(3) << tok_cnt << " tokens active.";
   PossiblyResizeHash(tok_cnt);  // This makes sure the hash is always big enough.
-    
+
   // This is the cutoff we use after adding in the log-likes (i.e.
   // for the next frame).  This is a bound on the cutoff we will use
   // on the next frame.
   double next_weight_cutoff = std::numeric_limits<double>::infinity();
-  
+
   // First process the best token to get a hopefully
   // reasonably tight bound on the next cutoff.
   if (best_elem) {
@@ -304,7 +307,7 @@ double FasterDecoder::ProcessEmitting(DecodableInterface *decodable) {
 
 // TODO: first time we go through this, could avoid using the queue.
 void FasterDecoder::ProcessNonemitting(double cutoff) {
-  // Processes nonemitting arcs for one frame. 
+  // Processes nonemitting arcs for one frame.
   KALDI_ASSERT(queue_.empty());
   for (const Elem *e = toks_.GetList(); e != NULL;  e = e->tail)
     queue_.push_back(e->key);

@@ -30,6 +30,8 @@
 #include "nnet3/decodable-simple-looped.h"
 #include "hmm/transition-model.h"
 
+#include "util/microprofile.h"
+
 namespace kaldi {
 namespace nnet3 {
 
@@ -90,6 +92,7 @@ class DecodableNnetLoopedOnlineBase: public DecodableInterface {
   /// is not 1, it's an index that is "after subsampling", i.e. it changes more
   /// slowly than the input-feature index.
   inline void EnsureFrameIsComputed(int32 subsampled_frame) {
+    //MICROPROFILE_SCOPEI("pipeline", "EnsureFrameIsComputed", MP_FIREBRICK1);
     KALDI_ASSERT(subsampled_frame >= current_log_post_subsampled_offset_ &&
                  "Frames must be accessed in order.");
     while (subsampled_frame >= current_log_post_subsampled_offset_ +

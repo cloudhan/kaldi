@@ -21,6 +21,8 @@
 #include "lat/lattice-functions.h"
 #include "lat/determinize-lattice-pruned.h"
 
+#include "util/microprofile.h"
+
 namespace kaldi {
 
 SingleUtteranceNnet2Decoder::SingleUtteranceNnet2Decoder(
@@ -38,6 +40,7 @@ SingleUtteranceNnet2Decoder::SingleUtteranceNnet2Decoder(
 }
 
 void SingleUtteranceNnet2Decoder::AdvanceDecoding() {
+  MICROPROFILE_SCOPEI("decoder", "SingleUtteranceNnet2Decoder::AdvanceDecoding", MP_SPRINGGREEN1);
   decoder_.AdvanceDecoding(&decodable_);
 }
 
@@ -73,9 +76,8 @@ bool SingleUtteranceNnet2Decoder::EndpointDetected(
     const OnlineEndpointConfig &config) {
   return kaldi::EndpointDetected(config, tmodel_,
                                  feature_pipeline_->FrameShiftInSeconds(),
-                                 decoder_);  
+                                 decoder_);
 }
 
 
 }  // namespace kaldi
-

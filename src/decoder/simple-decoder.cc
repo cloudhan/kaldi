@@ -22,6 +22,8 @@
 #include "fstext/remove-eps-local.h"
 #include <algorithm>
 
+#include "util/microprofile.h"
+
 namespace kaldi {
 
 SimpleDecoder::~SimpleDecoder() {
@@ -57,6 +59,8 @@ void SimpleDecoder::InitDecoding() {
 
 void SimpleDecoder::AdvanceDecoding(DecodableInterface *decodable,
                                       int32 max_num_frames) {
+  MICROPROFILE_SCOPEI("decoder", "SimpleDecoder::AdvanceDecoding", MP_SADDLEBROWN);
+
   KALDI_ASSERT(num_frames_decoded_ >= 0 &&
                "You must call InitDecoding() before AdvanceDecoding()");
   int32 num_frames_ready = decodable->NumFramesReady();
@@ -76,7 +80,7 @@ void SimpleDecoder::AdvanceDecoding(DecodableInterface *decodable,
     ProcessEmitting(decodable);
     ProcessNonemitting();
     PruneToks(beam_, &cur_toks_);
-  }   
+  }
 }
 
 bool SimpleDecoder::ReachedFinal() const {
@@ -188,7 +192,7 @@ void SimpleDecoder::ProcessEmitting(DecodableInterface *decodable) {
       if (arc.ilabel != 0) {  // propagate..
         BaseFloat acoustic_cost = -decodable->LogLikelihood(frame, arc.ilabel);
         double total_cost = tok->cost_ + arc.weight.Value() + acoustic_cost;
-        
+
         if (total_cost > cutoff) continue;
         if (total_cost + beam_  < cutoff)
           cutoff = total_cost + beam_;
@@ -224,7 +228,7 @@ void SimpleDecoder::ProcessNonemitting() {
     best_cost = std::min(best_cost, iter->second->cost_);
   }
   double cutoff = best_cost + beam_;
-  
+
   while (!queue_.empty()) {
     StateId state = queue_.back();
     queue_.pop_back();

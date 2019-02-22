@@ -20,6 +20,9 @@
 #include "nnet3/decodable-online-looped.h"
 #include "nnet3/nnet-utils.h"
 
+#include "util/microprofile.h"
+#include "util/timer.h"
+
 namespace kaldi {
 namespace nnet3 {
 
@@ -110,6 +113,8 @@ bool DecodableNnetLoopedOnlineBase::IsLastFrame(
 
 
 void DecodableNnetLoopedOnlineBase::AdvanceChunk() {
+  MICROPROFILE_SCOPEI("pipeline", "AdvanceChunk", MP_FIREBRICK1);
+  T::Start(1);
   // Prepare the input data for the next chunk of features.
   // note: 'end' means one past the last.
   int32 begin_input_frame, end_input_frame;
@@ -227,6 +232,8 @@ void DecodableNnetLoopedOnlineBase::AdvanceChunk() {
   current_log_post_subsampled_offset_ =
       (num_chunks_computed_ - 1) *
       (info_.frames_per_chunk / info_.opts.frame_subsampling_factor);
+
+  T::End(1);
 }
 
 BaseFloat DecodableNnetLoopedOnline::LogLikelihood(int32 subsampled_frame,
