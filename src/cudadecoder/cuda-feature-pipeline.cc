@@ -22,60 +22,6 @@
 
 namespace kaldi {
 
-// CudaFeaturePipelineInfo::CudaFeaturePipelineInfo(
-//     const CudaFeaturePipelineConfig &config):
-//     silence_weighting_config(config.silence_weighting_config) {
-//   if (config.feature_type == "mfcc" || config.feature_type == "plp" ||
-//       config.feature_type == "fbank") {
-//     feature_type = config.feature_type;
-//   } else {
-//     KALDI_ERR << "Invalid feature type: " << config.feature_type << ". "
-//               << "Supported feature types: mfcc, plp.";
-//   }
-
-//   if (config.mfcc_config != "") {
-//     ReadConfigFromFile(config.mfcc_config, &mfcc_opts);
-//     if (feature_type != "mfcc")
-//       KALDI_WARN << "--mfcc-config option has no effect "
-//                  << "since feature type is set to " << feature_type << ".";
-//   }  // else use the defaults.
-
-//   if (config.plp_config != "") {
-//     ReadConfigFromFile(config.plp_config, &plp_opts);
-//     if (feature_type != "plp")
-//       KALDI_WARN << "--plp-config option has no effect "
-//                  << "since feature type is set to " << feature_type << ".";
-//   }  // else use the defaults.
-
-//   if (config.fbank_config != "") {
-//     ReadConfigFromFile(config.fbank_config, &fbank_opts);
-//     if (feature_type != "fbank")
-//       KALDI_WARN << "--fbank-config option has no effect "
-//                  << "since feature type is set to " << feature_type << ".";
-//   }  // else use the defaults.
-
-//   add_pitch = config.add_pitch;
-
-//   if (config.online_pitch_config != "") {
-//     ReadConfigsFromFile(config.online_pitch_config,
-//                         &pitch_opts,
-//                         &pitch_process_opts);
-//     if (!add_pitch)
-//       KALDI_WARN << "--online-pitch-config option has no effect "
-//                  << "since you did not supply --add-pitch option.";
-//   }  // else use the defaults.
-
-//   if (config.ivector_extraction_config != "") {
-//     use_ivectors = true;
-//     OnlineIvectorExtractionConfig ivector_extraction_opts;
-//     ReadConfigFromFile(config.ivector_extraction_config,
-//                        &ivector_extraction_opts);
-//     ivector_extractor_info.Init(ivector_extraction_opts);
-//   } else {
-//     use_ivectors = false;
-//   }
-// }
-
 CudaFeatureAdapter::CudaFeatureAdapter(CudaMfcc* cuda_mfcc)
  : computed_(false)
  , sample_frequency_(-INFINITY)
