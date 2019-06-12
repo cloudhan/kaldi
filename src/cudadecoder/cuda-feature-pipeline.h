@@ -38,35 +38,10 @@ namespace kaldi {
 /// @addtogroup  onlinefeat OnlineFeatureExtraction
 /// @{
 
-/// @file
-/// This file contains a different version of the feature-extraction pipeline in
-/// \ref online-feature-pipeline.h, specialized for use in neural network
-/// decoding with iVectors.  Our recipe is that we extract iVectors that will
-/// be used as an additional input to the neural network, in addition to
-/// a window of several frames of spliced raw features (MFCC, PLP or filterbanks).
-/// The iVectors are extracted on top of a (splice+LDA+MLLT) feature pipeline,
-/// with the added complication that the GMM posteriors used for the iVector
-/// extraction are obtained with a version of the features that has online
-/// cepstral mean (and optionally variance) normalization, whereas the stats for
-/// iVector are accumulated with a non-mean-normalized version of the features.
-/// The idea here is that we want the iVector to learn the mean offset, but
-/// we want the posteriors to be somewhat invariant to mean offsets.
-///
-/// Most of the logic for the actual iVector estimation is in \ref
-/// online-ivector-feature.h, this header contains mostly glue.
-///
-/// Although the name of this header mentions nnet2, actually the code is
-/// used in the online decoding with nnet3 also.
-
-
-/// This configuration class is to set up CudaFeaturePipelineInfo, which
-/// in turn is the configuration class for CudaFeaturePipeline.
-/// Instead of taking the options for the parts of the feature pipeline
-/// directly, it reads in the names of configuration classes.
-
 class CudaFeatureAdapter: public OnlineFeatureInterface {
  public:
   explicit CudaFeatureAdapter(CudaMfcc* cuda_mfcc);
+  virtual ~CudaFeatureAdapter();
 
   virtual int32 Dim() const;
   virtual int32 NumFramesReady() const;

@@ -28,6 +28,10 @@ CudaFeatureAdapter::CudaFeatureAdapter(CudaMfcc* cuda_mfcc)
  , mfcc_computer(cuda_mfcc)
 {}
 
+CudaFeatureAdapter::~CudaFeatureAdapter() {
+  delete mfcc_computer;
+}
+
 int32 CudaFeatureAdapter::Dim() const {
   if(mfcc_computer) {
     return mfcc_computer->Dim();
@@ -83,7 +87,7 @@ void CudaFeatureAdapter::InputFinished() {
     CuMatrix<BaseFloat> temp_cu_feature_out;
     tmp_cu_wave.CopyFromVec(waveform_);
 
-    // NOTE VTLN is not supported
+    // NOTE: VTLN is not supported
     mfcc_computer->ComputeFeatures(tmp_cu_wave, sample_frequency_, 1.0, &temp_cu_feature_out);
     features_.Resize(temp_cu_feature_out.NumRows(), temp_cu_feature_out.NumCols());
     features_.CopyFromMat(temp_cu_feature_out);
@@ -221,19 +225,6 @@ void CudaFeaturePipeline::InputFinished() {
   if (pitch_)
     pitch_->InputFinished();
 }
-
-// BaseFloat CudaFeaturePipelineInfo::FrameShiftInSeconds() const {
-//   if (feature_type == "mfcc") {
-//     return mfcc_opts.frame_opts.frame_shift_ms / 1000.0f;
-//   } else if (feature_type == "fbank") {
-//     return fbank_opts.frame_opts.frame_shift_ms / 1000.0f;
-//   } else if (feature_type == "plp") {
-//     return plp_opts.frame_opts.frame_shift_ms / 1000.0f;
-//   } else {
-//     KALDI_ERR << "Unknown feature type " << feature_type;
-//     return 0.0;
-//   }
-// }
 
 
 }  // namespace kaldi
