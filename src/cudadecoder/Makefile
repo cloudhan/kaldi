@@ -12,7 +12,8 @@ endif
 
 TESTFILES =
 
-OBJFILES = batched-threaded-nnet3-cuda-pipeline.o decodable-cumatrix.o \
+OBJFILES = batched-threaded-nnet3-cuda-pipeline-customized.o cuda-feature-pipeline.o \
+           batched-threaded-nnet3-cuda-pipeline.o decodable-cumatrix.o \
            cuda-decoder.o cuda-decoder-kernels.o cuda-fst.o
 
 LDFLAGS += $(CUDA_LDFLAGS)
