@@ -32,6 +32,7 @@
 #include "feat/pitch-functions.h"
 #include "online2/online-ivector-feature.h"
 #include "cudafeat/feature-mfcc-cuda.h"
+#include "online2/online-nnet2-feature-pipeline.h"
 
 namespace kaldi {
 /// @addtogroup  onlinefeat OnlineFeatureExtraction
@@ -62,57 +63,57 @@ namespace kaldi {
 /// in turn is the configuration class for CudaFeaturePipeline.
 /// Instead of taking the options for the parts of the feature pipeline
 /// directly, it reads in the names of configuration classes.
-struct CudaFeaturePipelineConfig {
-  std::string feature_type;  // "plp" or "mfcc" or "fbank"
-  std::string mfcc_config;
-  std::string plp_config;
-  std::string fbank_config;
+// struct CudaFeaturePipelineConfig {
+//   std::string feature_type;  // "plp" or "mfcc" or "fbank"
+//   std::string mfcc_config;
+//   std::string plp_config;
+//   std::string fbank_config;
 
-  // Note: if we do add pitch, it will not be added to the features we give to
-  // the iVector extractor but only to the features we give to the neural
-  // network, after the base features but before the iVector.  We don't think
-  // the iVector will be particularly helpful in normalizing the pitch features,
-  // and we wanted to avoid complications with things like online CMVN.
-  bool add_pitch;
+//   // Note: if we do add pitch, it will not be added to the features we give to
+//   // the iVector extractor but only to the features we give to the neural
+//   // network, after the base features but before the iVector.  We don't think
+//   // the iVector will be particularly helpful in normalizing the pitch features,
+//   // and we wanted to avoid complications with things like online CMVN.
+//   bool add_pitch;
 
-  // the following contains the type of options that you could give to
-  // compute-and-process-kaldi-pitch-feats.
-  std::string online_pitch_config;
+//   // the following contains the type of options that you could give to
+//   // compute-and-process-kaldi-pitch-feats.
+//   std::string online_pitch_config;
 
-  // The configuration variables in ivector_extraction_config relate to the
-  // iVector extractor and options related to it, see type
-  // OnlineIvectorExtractionConfig.
-  std::string ivector_extraction_config;
+//   // The configuration variables in ivector_extraction_config relate to the
+//   // iVector extractor and options related to it, see type
+//   // OnlineIvectorExtractionConfig.
+//   std::string ivector_extraction_config;
 
-  // Config that relates to how we weight silence for (ivector) adaptation
-  // this is registered directly to the command line as you might want to
-  // play with it in test time.
-  OnlineSilenceWeightingConfig silence_weighting_config;
+//   // Config that relates to how we weight silence for (ivector) adaptation
+//   // this is registered directly to the command line as you might want to
+//   // play with it in test time.
+//   OnlineSilenceWeightingConfig silence_weighting_config;
 
-  CudaFeaturePipelineConfig():
-      feature_type("mfcc"), add_pitch(false) { }
+//   CudaFeaturePipelineConfig():
+//       feature_type("mfcc"), add_pitch(false) { }
 
 
-  void Register(OptionsItf *opts) {
-    opts->Register("feature-type", &feature_type,
-                   "Base feature type [mfcc, plp, fbank]");
-    opts->Register("mfcc-config", &mfcc_config, "Configuration file for "
-                   "MFCC features (e.g. conf/mfcc.conf)");
-    opts->Register("plp-config", &plp_config, "Configuration file for "
-                   "PLP features (e.g. conf/plp.conf)");
-    opts->Register("fbank-config", &fbank_config, "Configuration file for "
-                   "filterbank features (e.g. conf/fbank.conf)");
-    opts->Register("add-pitch", &add_pitch, "Append pitch features to raw "
-                   "MFCC/PLP/filterbank features [but not for iVector extraction]");
-    opts->Register("online-pitch-config", &online_pitch_config, "Configuration "
-                   "file for online pitch features, if --add-pitch=true (e.g. "
-                   "conf/online_pitch.conf)");
-    opts->Register("ivector-extraction-config", &ivector_extraction_config,
-                   "Configuration file for online iVector extraction, "
-                   "see class OnlineIvectorExtractionConfig in the code");
-    silence_weighting_config.RegisterWithPrefix("ivector-silence-weighting", opts);
-  }
-};
+//   void Register(OptionsItf *opts) {
+//     opts->Register("feature-type", &feature_type,
+//                    "Base feature type [mfcc, plp, fbank]");
+//     opts->Register("mfcc-config", &mfcc_config, "Configuration file for "
+//                    "MFCC features (e.g. conf/mfcc.conf)");
+//     opts->Register("plp-config", &plp_config, "Configuration file for "
+//                    "PLP features (e.g. conf/plp.conf)");
+//     opts->Register("fbank-config", &fbank_config, "Configuration file for "
+//                    "filterbank features (e.g. conf/fbank.conf)");
+//     opts->Register("add-pitch", &add_pitch, "Append pitch features to raw "
+//                    "MFCC/PLP/filterbank features [but not for iVector extraction]");
+//     opts->Register("online-pitch-config", &online_pitch_config, "Configuration "
+//                    "file for online pitch features, if --add-pitch=true (e.g. "
+//                    "conf/online_pitch.conf)");
+//     opts->Register("ivector-extraction-config", &ivector_extraction_config,
+//                    "Configuration file for online iVector extraction, "
+//                    "see class OnlineIvectorExtractionConfig in the code");
+//     silence_weighting_config.RegisterWithPrefix("ivector-silence-weighting", opts);
+//   }
+// };
 
 
 /// This class is responsible for storing configuration variables, objects and
@@ -123,52 +124,48 @@ struct CudaFeaturePipelineConfig {
 /// which reads the options from the command line.  The reason for structuring
 /// it this way is to make it easier to configure from code as well as from the
 /// command line, as well as for easiter multithreaded operation.
-struct CudaFeaturePipelineInfo {
-  CudaFeaturePipelineInfo():
-      feature_type("mfcc"), add_pitch(false) { }
+// struct CudaFeaturePipelineInfo {
+//   CudaFeaturePipelineInfo():
+//       feature_type("mfcc"), add_pitch(false) { }
 
-  CudaFeaturePipelineInfo(
-      const CudaFeaturePipelineConfig &config);
+//   CudaFeaturePipelineInfo(
+//       const CudaFeaturePipelineConfig &config);
 
-  BaseFloat FrameShiftInSeconds() const;
+//   BaseFloat FrameShiftInSeconds() const;
 
-  std::string feature_type;  // "mfcc" or "plp" or "fbank"
+//   std::string feature_type;  // "mfcc" or "plp" or "fbank"
 
-  MfccOptions mfcc_opts;  // options for MFCC computation,
-                          // if feature_type == "mfcc"
-  PlpOptions plp_opts;  // Options for PLP computation, if feature_type == "plp"
-  FbankOptions fbank_opts;  // Options for filterbank computation, if
-                            // feature_type == "fbank"
+//   MfccOptions mfcc_opts;  // options for MFCC computation,
+//                           // if feature_type == "mfcc"
+//   PlpOptions plp_opts;  // Options for PLP computation, if feature_type == "plp"
+//   FbankOptions fbank_opts;  // Options for filterbank computation, if
+//                             // feature_type == "fbank"
 
-  bool add_pitch;
-  PitchExtractionOptions pitch_opts;  // Options for pitch extraction, if done.
-  ProcessPitchOptions pitch_process_opts;  // Options for pitch post-processing
+//   bool add_pitch;
+//   PitchExtractionOptions pitch_opts;  // Options for pitch extraction, if done.
+//   ProcessPitchOptions pitch_process_opts;  // Options for pitch post-processing
 
 
-  // If the user specified --ivector-extraction-config, we assume we're using
-  // iVectors as an extra input to the neural net.  Actually, we don't
-  // anticipate running this setup without iVectors.
-  bool use_ivectors;
-  OnlineIvectorExtractionInfo ivector_extractor_info;
+//   // If the user specified --ivector-extraction-config, we assume we're using
+//   // iVectors as an extra input to the neural net.  Actually, we don't
+//   // anticipate running this setup without iVectors.
+//   bool use_ivectors;
+//   OnlineIvectorExtractionInfo ivector_extractor_info;
 
-  // Config for weighting silence in iVector adaptation.
-  // We declare this outside of ivector_extractor_info... it was
-  // just easier to set up the code that way; and also we think
-  // it's the kind of thing you might want to play with directly
-  // on the command line instead of inside sub-config-files.
-  OnlineSilenceWeightingConfig silence_weighting_config;
+//   // Config for weighting silence in iVector adaptation.
+//   // We declare this outside of ivector_extractor_info... it was
+//   // just easier to set up the code that way; and also we think
+//   // it's the kind of thing you might want to play with directly
+//   // on the command line instead of inside sub-config-files.
+//   OnlineSilenceWeightingConfig silence_weighting_config;
 
-  int32 IvectorDim() { return ivector_extractor_info.extractor.IvectorDim(); }
- private:
-  KALDI_DISALLOW_COPY_AND_ASSIGN(CudaFeaturePipelineInfo);
-};
+//   int32 IvectorDim() { return ivector_extractor_info.extractor.IvectorDim(); }
+//  private:
+//   KALDI_DISALLOW_COPY_AND_ASSIGN(CudaFeaturePipelineInfo);
+// };
 
 
 class CudaFeatureAdapter: public OnlineFeatureInterface {
-  bool computed;
-  CuMatrix<BaseFloat> *cu_features;
-  CudaMfcc* mfcc_computer;
-
  public:
   explicit CudaFeatureAdapter(CudaMfcc* cuda_mfcc);
 
@@ -186,6 +183,12 @@ class CudaFeatureAdapter: public OnlineFeatureInterface {
   virtual void GetFrames(const std::vector<int32> &frames,
                          MatrixBase<BaseFloat> *feats);
 
+private:
+  bool computed_;
+  BaseFloat sample_frequency_;
+  Vector<BaseFloat> waveform_;
+  Matrix<BaseFloat> features_;
+  CudaMfcc* mfcc_computer;
 };
 
 /// CudaFeaturePipeline is a class that's responsible for putting
@@ -206,7 +209,7 @@ class CudaFeaturePipeline: public OnlineFeatureInterface {
   /// non-initial utterance of a speaker, you may want to call
   /// SetAdaptationState().
   explicit CudaFeaturePipeline(
-      const CudaFeaturePipelineInfo &info);
+      const OnlineNnet2FeaturePipelineInfo &info);
 
   /// Member functions from OnlineFeatureInterface:
 
@@ -291,7 +294,7 @@ class CudaFeaturePipeline: public OnlineFeatureInterface {
   virtual ~CudaFeaturePipeline();
  private:
 
-  const CudaFeaturePipelineInfo &info_;
+  const OnlineNnet2FeaturePipelineInfo &info_;
 
   CudaFeatureAdapter *base_feature_;        // MFCC/PLP/filterbank
 

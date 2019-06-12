@@ -26,7 +26,7 @@
 #include "feat/wave-reader.h"
 #include "lat/determinize-lattice-pruned.h"
 #include "nnet3/nnet-batch-compute.h"
-#include "online2/online-nnet2-feature-pipeline.h"
+//#include "online2/online-nnet2-feature-pipeline.h"
 #include "thread-pool.h"
 #include "cudadecoder/batched-threaded-nnet3-cuda-pipeline.h"
 

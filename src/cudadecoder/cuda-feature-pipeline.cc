@@ -22,100 +22,153 @@
 
 namespace kaldi {
 
-CudaFeaturePipelineInfo::CudaFeaturePipelineInfo(
-    const CudaFeaturePipelineConfig &config):
-    silence_weighting_config(config.silence_weighting_config) {
-  if (config.feature_type == "mfcc" || config.feature_type == "plp" ||
-      config.feature_type == "fbank") {
-    feature_type = config.feature_type;
-  } else {
-    KALDI_ERR << "Invalid feature type: " << config.feature_type << ". "
-              << "Supported feature types: mfcc, plp.";
-  }
+// CudaFeaturePipelineInfo::CudaFeaturePipelineInfo(
+//     const CudaFeaturePipelineConfig &config):
+//     silence_weighting_config(config.silence_weighting_config) {
+//   if (config.feature_type == "mfcc" || config.feature_type == "plp" ||
+//       config.feature_type == "fbank") {
+//     feature_type = config.feature_type;
+//   } else {
+//     KALDI_ERR << "Invalid feature type: " << config.feature_type << ". "
+//               << "Supported feature types: mfcc, plp.";
+//   }
 
-  if (config.mfcc_config != "") {
-    ReadConfigFromFile(config.mfcc_config, &mfcc_opts);
-    if (feature_type != "mfcc")
-      KALDI_WARN << "--mfcc-config option has no effect "
-                 << "since feature type is set to " << feature_type << ".";
-  }  // else use the defaults.
+//   if (config.mfcc_config != "") {
+//     ReadConfigFromFile(config.mfcc_config, &mfcc_opts);
+//     if (feature_type != "mfcc")
+//       KALDI_WARN << "--mfcc-config option has no effect "
+//                  << "since feature type is set to " << feature_type << ".";
+//   }  // else use the defaults.
 
-  if (config.plp_config != "") {
-    ReadConfigFromFile(config.plp_config, &plp_opts);
-    if (feature_type != "plp")
-      KALDI_WARN << "--plp-config option has no effect "
-                 << "since feature type is set to " << feature_type << ".";
-  }  // else use the defaults.
+//   if (config.plp_config != "") {
+//     ReadConfigFromFile(config.plp_config, &plp_opts);
+//     if (feature_type != "plp")
+//       KALDI_WARN << "--plp-config option has no effect "
+//                  << "since feature type is set to " << feature_type << ".";
+//   }  // else use the defaults.
 
-  if (config.fbank_config != "") {
-    ReadConfigFromFile(config.fbank_config, &fbank_opts);
-    if (feature_type != "fbank")
-      KALDI_WARN << "--fbank-config option has no effect "
-                 << "since feature type is set to " << feature_type << ".";
-  }  // else use the defaults.
+//   if (config.fbank_config != "") {
+//     ReadConfigFromFile(config.fbank_config, &fbank_opts);
+//     if (feature_type != "fbank")
+//       KALDI_WARN << "--fbank-config option has no effect "
+//                  << "since feature type is set to " << feature_type << ".";
+//   }  // else use the defaults.
 
-  add_pitch = config.add_pitch;
+//   add_pitch = config.add_pitch;
 
-  if (config.online_pitch_config != "") {
-    ReadConfigsFromFile(config.online_pitch_config,
-                        &pitch_opts,
-                        &pitch_process_opts);
-    if (!add_pitch)
-      KALDI_WARN << "--online-pitch-config option has no effect "
-                 << "since you did not supply --add-pitch option.";
-  }  // else use the defaults.
+//   if (config.online_pitch_config != "") {
+//     ReadConfigsFromFile(config.online_pitch_config,
+//                         &pitch_opts,
+//                         &pitch_process_opts);
+//     if (!add_pitch)
+//       KALDI_WARN << "--online-pitch-config option has no effect "
+//                  << "since you did not supply --add-pitch option.";
+//   }  // else use the defaults.
 
-  if (config.ivector_extraction_config != "") {
-    use_ivectors = true;
-    OnlineIvectorExtractionConfig ivector_extraction_opts;
-    ReadConfigFromFile(config.ivector_extraction_config,
-                       &ivector_extraction_opts);
-    ivector_extractor_info.Init(ivector_extraction_opts);
-  } else {
-    use_ivectors = false;
-  }
-}
+//   if (config.ivector_extraction_config != "") {
+//     use_ivectors = true;
+//     OnlineIvectorExtractionConfig ivector_extraction_opts;
+//     ReadConfigFromFile(config.ivector_extraction_config,
+//                        &ivector_extraction_opts);
+//     ivector_extractor_info.Init(ivector_extraction_opts);
+//   } else {
+//     use_ivectors = false;
+//   }
+// }
 
-CudaFeatureAdapter::CudaFeatureAdapter(CudaMfcc* cuda_mfcc) :
-  mfcc_computer(cuda_mfcc), computed(false) {}
+CudaFeatureAdapter::CudaFeatureAdapter(CudaMfcc* cuda_mfcc)
+ : computed_(false)
+ , sample_frequency_(-INFINITY)
+ , mfcc_computer(cuda_mfcc)
+{}
 
 int32 CudaFeatureAdapter::Dim() const {
-  throw std::runtime_error("NotImplemented");
+  if(mfcc_computer) {
+    return mfcc_computer->Dim();
+  }
+
+  KALDI_ERR << "Unknown cuda feature computer";
 }
 
 int32 CudaFeatureAdapter::NumFramesReady() const {
-  throw std::runtime_error("NotImplemented");
+  return features_.NumRows();
 }
 
 bool CudaFeatureAdapter::IsLastFrame(int32 frame) const {
-  throw std::runtime_error("NotImplemented");
+  return computed_ && frame == NumFramesReady() - 1;
 }
 
 BaseFloat CudaFeatureAdapter::FrameShiftInSeconds() const {
-  throw std::runtime_error("NotImplemented");
+  KALDI_ERR << "NotImplemented";
 }
 
 void CudaFeatureAdapter::AcceptWaveform(BaseFloat sampling_rate,
-    const VectorBase<BaseFloat> &waveform) {
-  throw std::runtime_error("NotImplemented");
+    const VectorBase<BaseFloat> &new_waveform) {
+  if (new_waveform.Dim() == 0)
+    return;  // Nothing to do.
+  if (computed_)
+    KALDI_ERR << "AcceptWaveform called after feature has been computed";
+  if (sample_frequency_ < 0.0 || abs(sample_frequency_ - sampling_rate) < 0.00001 ) {
+    sample_frequency_ = sampling_rate;
+  }
+  else {
+    KALDI_ERR << "try to accept waveform with different sampling rate";
+  }
+
+  Vector<BaseFloat> appended_wave;
+
+  appended_wave.Resize(waveform_.Dim() + new_waveform.Dim());
+  if (waveform_.Dim() != 0)
+    appended_wave.Range(0, waveform_.Dim())
+        .CopyFromVec(waveform_);
+  appended_wave.Range(waveform_.Dim(), new_waveform.Dim())
+      .CopyFromVec(new_waveform);
+  waveform_.Swap(&appended_wave);
 }
 
 void CudaFeatureAdapter::InputFinished() {
-  throw std::runtime_error("NotImplemented");
+  if(computed_) {
+    KALDI_ERR << "InputFinished called multiple times";
+  }
+
+  if(mfcc_computer) {
+    CuVector<BaseFloat> tmp_cu_wave;
+    tmp_cu_wave.Resize(waveform_.Dim());
+    CuMatrix<BaseFloat> temp_cu_feature_out;
+    tmp_cu_wave.CopyFromVec(waveform_);
+
+    // NOTE VTLN is not supported
+    mfcc_computer->ComputeFeatures(tmp_cu_wave, sample_frequency_, 1.0, &temp_cu_feature_out);
+    features_.Resize(temp_cu_feature_out.NumRows(), temp_cu_feature_out.NumCols());
+    features_.CopyFromMat(temp_cu_feature_out);
+  }
+  else {
+    KALDI_ERR << "Unknown cuda feature computer";
+  }
+  computed_ = true;
 }
 
 void CudaFeatureAdapter::GetFrame(int32 frame, VectorBase<BaseFloat> *feat) {
-  throw std::runtime_error("NotImplemented");
+  KALDI_ASSERT(computed_);
+  KALDI_ASSERT(frame < features_.NumRows());
+
+  feat->CopyRowFromMat(features_, frame);
 }
 
 void CudaFeatureAdapter::GetFrames(const std::vector<int32> &frames,
                          MatrixBase<BaseFloat> *feats){
-  throw std::runtime_error("NotImplemented");
+  KALDI_ASSERT(computed_);
+  for(auto i : frames){
+    KALDI_ASSERT(i < features_.NumRows());
+  }
+  KALDI_ASSERT(static_cast<int32>(frames.size()) == feats->NumRows());
+
+  feats->CopyRows(features_, frames.data());
 }
 
 
 CudaFeaturePipeline::CudaFeaturePipeline(
-    const CudaFeaturePipelineInfo &info):
+    const OnlineNnet2FeaturePipelineInfo &info):
     info_(info) {
   if (info_.feature_type == "mfcc") {
     base_feature_ = new CudaFeatureAdapter(new CudaMfcc(info_.mfcc_opts));
@@ -223,18 +276,18 @@ void CudaFeaturePipeline::InputFinished() {
     pitch_->InputFinished();
 }
 
-BaseFloat CudaFeaturePipelineInfo::FrameShiftInSeconds() const {
-  if (feature_type == "mfcc") {
-    return mfcc_opts.frame_opts.frame_shift_ms / 1000.0f;
-  } else if (feature_type == "fbank") {
-    return fbank_opts.frame_opts.frame_shift_ms / 1000.0f;
-  } else if (feature_type == "plp") {
-    return plp_opts.frame_opts.frame_shift_ms / 1000.0f;
-  } else {
-    KALDI_ERR << "Unknown feature type " << feature_type;
-    return 0.0;
-  }
-}
+// BaseFloat CudaFeaturePipelineInfo::FrameShiftInSeconds() const {
+//   if (feature_type == "mfcc") {
+//     return mfcc_opts.frame_opts.frame_shift_ms / 1000.0f;
+//   } else if (feature_type == "fbank") {
+//     return fbank_opts.frame_opts.frame_shift_ms / 1000.0f;
+//   } else if (feature_type == "plp") {
+//     return plp_opts.frame_opts.frame_shift_ms / 1000.0f;
+//   } else {
+//     KALDI_ERR << "Unknown feature type " << feature_type;
+//     return 0.0;
+//   }
+// }
 
 
 }  // namespace kaldi

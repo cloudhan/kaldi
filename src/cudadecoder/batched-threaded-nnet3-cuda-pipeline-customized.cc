@@ -22,6 +22,7 @@
 #include "cudadecoder/batched-threaded-nnet3-cuda-pipeline-customized.h"
 #include "base/kaldi-utils.h"
 #include <nvToolsExt.h>
+#include "cudadecoder/cuda-feature-pipeline.h"
 
 namespace kaldi {
 namespace cuda_decoder {
@@ -364,7 +365,7 @@ void BatchedThreadedNnet3CudaPipelineCustomized::ComputeOneFeature(TaskState *ta
   Matrix<BaseFloat> &input_features = task.input_features;
 
   // create decoding state
-  OnlineNnet2FeaturePipeline feature(*feature_info_);
+  CudaFeaturePipeline feature(*feature_info_);
 
   // Accept waveforms
   feature.AcceptWaveform(
