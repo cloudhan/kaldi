@@ -72,7 +72,7 @@ struct PitchExtractionOptions {
       lowpass_cutoff(1000),
       resample_freq(4000),
       delta_pitch(0.005),
-      nccf_ballast(0.7),
+      nccf_ballast(7000),
       lowpass_filter_width(1),
       upsample_filter_width(5) {}
   void Register(OptionsItf *po) {

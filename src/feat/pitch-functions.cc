@@ -25,6 +25,7 @@
 #include "feat/pitch-functions.h"
 #include "feat/resample.h"
 #include "feat/mel-computations.h"
+#include <iomanip>
 
 namespace kaldi {
 
@@ -136,7 +137,7 @@ BaseFloat NccfToPovFeature(BaseFloat n) {
    we had enough statistics to get that ratio.  The NCCF covers [-1, 1]; almost
    all of the probability mass is on [0, 1] but the empirical POV seems fairly
    symmetric with a minimum near zero, so we chose to make it a function of n' = fabs(n).
-   
+
    Then we manually tuned a function (the one you see above) that approximated
    the log-prob-ratio of voicing fairly well as a function of the absolute-value
    NCCF n'; however, wasn't a very exact match since we were also trying to make
@@ -221,10 +222,10 @@ void PreProcess(const PitchExtractionOptions opts,
   resample.Resample(wave, flush, processed_wave);
 
   // Normalize input signal using rms
-  double rms = pow(VecVec((*processed_wave), (*processed_wave))
-    / processed_wave->Dim(), 0.5);
-  if (rms != 0.0)
-    (*processed_wave).Scale(1.0 / rms);
+  // double rms = pow(VecVec((*processed_wave), (*processed_wave))
+  //   / processed_wave->Dim(), 0.5);
+  // if (rms != 0.0)
+  //   (*processed_wave).Scale(1.0 / rms);
 }
 
 
@@ -269,7 +270,7 @@ void ComputeCorrelation(const Vector<BaseFloat> &wave,
  */
 void ProcessNccf(const Vector<BaseFloat> &inner_prod,
                  const Vector<BaseFloat> &norm_prod,
-                 double nccf_ballast,
+                 BaseFloat nccf_ballast,
                  SubVector<BaseFloat> *nccf_vec) {
   KALDI_ASSERT(inner_prod.Dim() == norm_prod.Dim() &&
                inner_prod.Dim() == nccf_vec->Dim());
@@ -334,10 +335,11 @@ class PitchExtractor {
   }
 
   void FastViterbi(const Matrix<BaseFloat> &nccf) {
-    double intercost, min_c, this_c;
+    BaseFloat intercost, min_c, this_c;
     int best_b, min_i, max_i;
-    BaseFloat delta_pitch_sq = log(1 + opts_.delta_pitch)
-      * log(1 + opts_.delta_pitch);
+    const BaseFloat delta_pitch_sq = pow(log(1 + opts_.delta_pitch), 2.0);
+    const BaseFloat inter_frame_factor = delta_pitch_sq * opts_.penalty_factor;
+
     // loop over frames
     for (int32 t = 1; t < num_frames_ + 1; t++) {
       // The stuff with the "forward pass" and "backward "pass" is described in
@@ -346,6 +348,8 @@ class PitchExtractor {
       // [pitch on last frame, pitch on this frame].
       Vector<BaseFloat> local_cost(num_states_);
       ComputeLocalCost(nccf.Row(t - 1), &local_cost);
+      // std::cerr << local_cost << std::endl;
+
       // Forward Pass
       for (int32 i = 0; i < num_states_; i++) {
         if ( i == 0 )
@@ -356,8 +360,8 @@ class PitchExtractor {
         best_b = -1;
 
         for (int32 k = min_i; k <= i; k++) {
-          intercost = (i-k) * (i-k) * delta_pitch_sq;
-          this_c = frames_[t-1].obj_func(k)+ opts_.penalty_factor * intercost;
+          intercost = (i-k) * (i-k) * inter_frame_factor;
+          this_c = frames_[t-1].obj_func(k) + intercost;
           if (this_c < min_c) {
             min_c = this_c;
             best_b = k;
@@ -376,8 +380,8 @@ class PitchExtractor {
         best_b = frames_[t].back_pointers[i];
 
         for (int32 k = i+1 ; k <= max_i; k++) {
-          intercost = (i-k) * (i-k) * delta_pitch_sq;
-          this_c = frames_[t-1].obj_func(k)+ opts_.penalty_factor *intercost;
+          intercost = (i-k) * (i-k) * inter_frame_factor;
+          this_c = frames_[t-1].obj_func(k) + intercost;
           if (this_c < min_c) {
             min_c = this_c;
             best_b = k;
@@ -386,7 +390,19 @@ class PitchExtractor {
         frames_[t].back_pointers[i] = best_b;
         frames_[t].obj_func(i) = min_c + local_cost(i);
       }
+
+      // std::cerr << frames_[t].obj_func << std::endl;
+      double remainder = frames_[t].obj_func.Min();
+      frames_[t].obj_func.Add(-remainder);
     }
+
+    Matrix<BaseFloat> cost(num_frames_, num_states_);
+    for(int i=0; i< num_frames_; i++) {
+      SubVector<BaseFloat> cost_row(cost, i);
+      cost_row.CopyFromVec(frames_[i+1].obj_func);
+    }
+
+    WriteKaldiObject<Matrix<BaseFloat> >(cost, "cost.mat", true);
   }
 
   void FindBestPath(const Matrix<BaseFloat> &correlation) {
@@ -396,6 +412,7 @@ class PitchExtractor {
     double l_opt;
     frames_[i].obj_func.Min(&best);
     while (i > 0) {
+      // std::cerr << best << std::endl;
       l_opt = lags_(best);
       frames_[i].truepitch = 1.0 / l_opt;
       frames_[i].pov = correlation(i-1, best);
@@ -416,10 +433,10 @@ class PitchExtractor {
   int32 num_frames_;    // number of frames in input wave
   Vector<BaseFloat> lags_;    // all lags used in viterbi
   struct PitchFrame {
-    Vector<double> obj_func;      // optimal objective function for frame i
+    Vector<BaseFloat> obj_func;      // optimal objective function for frame i
     std::vector<int32> back_pointers;
-    double truepitch;             // True pitch
-    double pov;                   // probability of voicing
+    BaseFloat truepitch;             // True pitch
+    BaseFloat pov;                   // probability of voicing
     explicit PitchFrame() {}
   };
   std::vector< PitchFrame > frames_;
@@ -433,6 +450,8 @@ void ComputeKaldiPitch(const PitchExtractionOptions &opts,
   // Preprocess the wave
   Vector<BaseFloat> processed_wave(wave.Dim());
   PreProcess(opts, wave, &processed_wave);
+  processed_wave.Resize(76999, kCopyData);
+
   int32 num_frames = PitchNumFrames(processed_wave.Dim(), opts);
   if (num_frames == 0)
     KALDI_ERR << "No frames fit in file (#samples is "
@@ -458,15 +477,32 @@ void ComputeKaldiPitch(const PitchExtractionOptions &opts,
   Matrix<BaseFloat> nccf_pitch(num_frames, num_initial_lags),
       nccf_pov(num_frames, num_initial_lags);
 
-  double nccf_ballast_pitch = pow(opts.NccfWindowSize(), 4) * opts.nccf_ballast;
+  double sumsq = VecVec(processed_wave, processed_wave);
+  double sum = processed_wave.Sum();
+  double mean_square = sumsq / processed_wave.Dim() - pow(sum / processed_wave.Dim(), 2.0);
+
+  double nccf_ballast_pitch = pow(mean_square * opts.NccfWindowSize(), 2) * opts.nccf_ballast;
   double nccf_ballast_pov = 0.0;
 
+  Matrix<BaseFloat> windows(num_frames, opts.NccfWindowSize() + end);
+  Matrix<BaseFloat> inner_prods(num_frames, num_initial_lags, kSetZero);
+  Matrix<BaseFloat> norm_prods(num_frames, num_initial_lags, kSetZero);
+
+  // std::cerr << processed_wave << std::endl;
   for (int32 r = 0; r < num_frames; r++) {  // r is frame index.
     ExtractFrame(processed_wave, r, opts, &window);
+    SubVector<BaseFloat> windows_row(windows, r);
+    windows_row.CopyFromVec(window);
+
     // compute nccf for pitch extraction
     Vector<BaseFloat> inner_prod(num_initial_lags), norm_prod(num_initial_lags);
     ComputeCorrelation(window, start, end, opts.NccfWindowSize(),
                        &inner_prod, &norm_prod);
+    SubVector<BaseFloat> inner_prods_row(inner_prods, r);
+    SubVector<BaseFloat> norm_prods_row(norm_prods, r);
+    inner_prods_row.CopyFromVec(inner_prod);
+    norm_prods_row.CopyFromVec(norm_prod);
+
     SubVector<BaseFloat> nccf_pitch_vec(nccf_pitch.Row(r));
     ProcessNccf(inner_prod, norm_prod, nccf_ballast_pitch,
                 &(nccf_pitch_vec));
@@ -475,6 +511,9 @@ void ComputeKaldiPitch(const PitchExtractionOptions &opts,
     SubVector<BaseFloat> nccf_pov_vec(nccf_pov.Row(r));
     ProcessNccf(inner_prod, norm_prod, nccf_ballast_pov,
                 &(nccf_pov_vec));
+    if ((r % 100) == 0){
+      std::cerr << std::setprecision(64) << "mean_square: " << mean_square << " " << sumsq << " " << sum << " " << processed_wave.Dim() << " " << nccf_ballast_pitch << " " << std::endl;
+    }
   }
   Vector<BaseFloat> final_lags_offset(final_lags);
   // final_lags_offset is the final_lags with start / opts.resample_freq
@@ -483,6 +522,13 @@ void ComputeKaldiPitch(const PitchExtractionOptions &opts,
   // start / opts.resample_freq.  This is necessary because the resampling code
   // assumes that the input signal starts from sample zero.
   final_lags_offset.Add(-start / opts.resample_freq);
+
+  WriteKaldiObject<Matrix<BaseFloat> >(windows, "windows.mat", true);
+  WriteKaldiObject<Matrix<BaseFloat> >(inner_prods, "inner_prods.mat", true);
+  WriteKaldiObject<Matrix<BaseFloat> >(norm_prods, "norm_prods.mat", true);
+  WriteKaldiObject<Matrix<BaseFloat> >(nccf_pitch, "nccf_pitch.mat", true);
+  WriteKaldiObject<Matrix<BaseFloat> >(nccf_pov, "nccf_pov.mat", true);
+
 
   // upsample_cutoff is the filter cutoff for upsampling the NCCF, which is the
   // Nyquist of the resampling frequency.  The NCCF is (almost completely)
@@ -501,12 +547,21 @@ void ComputeKaldiPitch(const PitchExtractionOptions &opts,
   Matrix<BaseFloat> resampled_nccf_pov(num_frames, num_states);
   resample.Resample(nccf_pov, &resampled_nccf_pov);
 
-  PitchExtractor pitch(opts, final_lags, num_states, num_frames);
+  resampled_nccf_pitch.Resize(num_frames-2, num_states, kCopyData);
+  resampled_nccf_pov.Resize(num_frames-2, num_states, kCopyData);
+
+  WriteKaldiObject<Matrix<BaseFloat> >(resampled_nccf_pitch, "resampled_nccf_pitch.mat", true);
+  WriteKaldiObject<Matrix<BaseFloat> >(resampled_nccf_pov, "resampled_nccf_pov.mat", true);
+
+  // std::cerr << final_lags << std::endl;
+
+  PitchExtractor pitch(opts, final_lags, num_states, num_frames-2);
   pitch.FastViterbi(resampled_nccf_pitch);
   // pitch.FindBestPath will use the NCCF without the "ballast" term
   // when it notes the NCCF at each frame.
   pitch.FindBestPath(resampled_nccf_pov);
-  output->Resize(num_frames, 2);  // (pov, pitch)
+  output->Resize(num_frames-2, 2);  // (pov, pitch)
+
   pitch.GetPitchAndPov(output);
 }
 
