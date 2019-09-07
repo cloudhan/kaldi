@@ -5,10 +5,11 @@ all:
 include ../kaldi.mk
 ifeq ($(CUDA), true)
 
-TESTFILES = 
+TESTFILES =
 
 ifeq ($(CUDA), true)
   OBJFILES +=  feature-window-cuda.o feature-spectral-cuda.o feature-online-cmvn-cuda.o \
+							 feature-pitch-cuda.o \
 							 online-ivector-feature-cuda-kernels.o online-ivector-feature-cuda.o \
 							 online-cuda-feature-pipeline.o
 endif
